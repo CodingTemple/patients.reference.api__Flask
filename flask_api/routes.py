@@ -10,11 +10,14 @@ import jwt
 
 from flask_api.forms import UserForm, LoginForm
 
+from flask_api.token_verification import token_required
+
 
 
 #Endpoint for Creating patients
 @app.route('/patients/create', methods = ['POST'])
-def create_patient():
+@token_required
+def create_patient(current_user_token):
     name = request.json['full_name']
     gender = request.json['gender']
     address = request.json['address']
@@ -32,20 +35,23 @@ def create_patient():
 
 # Endpoint for ALL patients
 @app.route('/patients', methods = ['GET'])
-def get_patients():
+@token_required
+def get_patients(current_user_token):
     patients = Patient.query.all()
     return jsonify(patients_schema.dump(patients))
 
 # Endpoint for ONE patient based on their ID
 @app.route('/patients/<id>', methods = ['GET'])
-def get_patient(id):
+@token_required
+def get_patient(current_user_token,id):
     patient = Patient.query.get(id)
     results = patient_schema.dump(patient)
     return jsonify(results)
 
 # Endpoint for updating patient data
 @app.route('/patients/update/<id>', methods = ['POST', 'PUT'])
-def update_patient(id):
+@token_required
+def update_patient(current_user_token,id):
     patient = Patient.query.get(id)
 
     # Update info below
@@ -64,7 +70,8 @@ def update_patient(id):
 
 # Endpoint for deleting patient data
 @app.route('/patients/delete/<id>', methods = ['DELETE'])
-def delete_patient(id):
+@token_required
+def delete_patient(current_user_token,id):
     patient = Patient.query.get(id)
 
     db.session.delete(patient)
@@ -115,4 +122,19 @@ def get_key():
     db.session.commit()
     results = token.decode('utf-8')
     return render_template('token.html', token = results)
+
+# Get a new API Key
+@app.route('/users/updatekey', methods = ['GET', 'POST', 'PUT'])
+def refresh_key():
+    refresh_key = {'refreshToken': jwt.encode({'public_id':current_user.id, 'email': current_user.email}, app.config['SECRET_KEY'])}
+    temp = refresh_key.get('refreshToken')
+    new_token = temp.decode('utf-8')
+
+    # Adding Refreshed Token to DB
+    user = User.query.filter_by(email = current_user.email).first()
+    user.token = new_token
+
+    db.session.add(user)
+    db.session.commit()
     
+    return render_template('token_refresh.html', new_token = new_token)
